@@ -3,7 +3,8 @@
 ######################################################
 import numpy as np
 from LinRNN import LinRNN
-
+import torch
+import tensorflow as tf
 '''
 Random 2RNN data generating function
 '''
@@ -13,6 +14,7 @@ def generate_data(mdl, N_samples, seq_length,noise_variance=0.):
     for i in range(N_samples):
         X.append(np.random.normal(0, 1, [seq_length, mdl.input_dim]))
         Y.append(mdl.predict(X[-1]) + np.random.normal(0, noise_variance))
+    X = np.swapaxes(np.asarray(X), 1, 2)
     return np.asarray(X),np.asarray(Y).squeeze()
 
 def generate_random_LinRNN(num_states, input_dim, output_dim,
@@ -33,6 +35,7 @@ def generate_data_simple_addition(num_examples, seq_length, n_dim = 1, noise_lev
     X[:, -1, :] = np.ones((num_examples, seq_length))
     Y = np.sum(X[:, :-1, :], axis=2)
     Y = Y.reshape(num_examples, -1) + np.random.normal(0, noise_level, [num_examples, n_dim]).reshape(num_examples, n_dim)
+    #X = np.swapaxes(X, 1, 2)
     return X, Y
 
 '''

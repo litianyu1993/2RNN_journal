@@ -59,11 +59,12 @@ def compute_mse(mdl, X, y, print_first_five_results = False, lstm = False, if_tf
         for o in X:
             pred.append(mdl.predict(o))
         pred = np.array(pred).reshape(len(y), -1)
+
         #print(pred.shape, y.shape)
         #if print_first_five_results == True:
         #print(X[0:1])
-        #print(pred[0:1])
-        #print(y[0:1])
+        print(pred[0:1])
+        print(y[0:1])
     #print(pred.shape, y.shape)
     return np.mean((pred - y) ** 2)
 
@@ -197,18 +198,19 @@ def OLS(X,Y):
     return np.linalg.lstsq(X.reshape(N,dim**l),Y, rcond=None)[0].reshape([dim]*l + [p])
 def convert_to_array(tt):
     tt_arr = []
-    tt_arr.append(tt[0].tensor.reshape(1, tt[0].shape[0],tt[0].shape[1]))
-    for i in range(1,len(tt)-1):
+    tt_arr.append(tt[0].tensor.reshape(1, tt[0].shape[0], tt[0].shape[1]))
+    for i in range(1, len(tt) - 1):
         tt_arr.append(tt[i].tensor)
     temp = tt[-1].tensor
     dim = temp.shape
-    temp =temp.reshape(dim[0]*dim[1], dim[2])
+    temp = temp.reshape(dim[0] * dim[1], dim[2])
     U, D, V = np.linalg.svd(temp)
     middle_rank = min(temp.shape[0], temp.shape[1])
     a = U[:, :middle_rank].reshape(dim[0], dim[1], middle_rank)
     b = (np.diag(D) @ V[:middle_rank, :]).reshape(middle_rank, V.shape[1], 1)
     tt_arr.append(a)
     tt_arr.append(b)
+    #tt_arr.append(tt[-1].tensor)
     return tt_arr
 def contract_all_edges(tt):
     output = tt[0].tensor

@@ -226,9 +226,11 @@ def _rightorth(a, b):
     """
     adim = np.array(a.shape)
     bdim = np.array(b.shape)
+    #print(adim, bdim)
     cr = np.reshape(a, (adim[0]*adim[1], adim[2]), order='F')
     cr2 = np.reshape(b, (bdim[0],bdim[1]*bdim[2]), order='F')
     [cr, R] = np.linalg.qr(cr)
+    #print(R.shape, cr2.shape, cr.shape)
     cr2 = np.dot(R, cr2)
 
     adim[2] = cr.shape[1]
@@ -245,15 +247,39 @@ def _leftorth(a,b):
     np.tensordot(a,b,axes=(2,0)
     remains unchanged
     """
-    adim = a.shape
-    bdim = b.shape
+    # adim = np.asarray(a.shape)
+    # bdim = np.asarray(b.shape)
+    #
+    # right = np.reshape(b, (bdim[0],bdim[1]*bdim[2]),order='F')
+    # [l, r] = np.linalg.qr(right)
+    # left = np.reshape(a, (adim[0] * adim[1], adim[2]), order='F')
+    # left = np.dot(left, l)
+    # right = r
+    #
+    # # for i in range(adim[2] - left.shape[1]):
+    # #     left = np.insert(left, left.shape[1], np.zeros(left.shape[0]), axis = 1)
+    # # for j in range(bdim[0] - right.shape[0]):
+    # #     right = np.insert(right, right.shape[0], np.zeros(right.shape[1]), axis = 0)
+    #
+    # # adim[2] = left.shape[1]
+    # # bdim[0] = right.shape[0]
+    #
+    # a = np.reshape(left, adim, order='F')
+    # b = np.reshape(right, bdim, order='F')
+
+    adim = np.asarray(a.shape)
+    bdim = np.asarray(b.shape)
     cr = np.reshape(b, (bdim[0],bdim[1]*bdim[2]),order='F').T
     [cr, R] = np.linalg.qr(cr)
     cr2 = np.reshape(a, (adim[0]*adim[1],adim[2]),order='F').T
     cr2 = np.dot(R, cr2)
 
+    adim[2] = cr2.T.shape[1]
+    bdim[0] = cr.T.shape[0]
+
     a = np.reshape(cr2.T, adim, order='F')
     b = np.reshape(cr.T, bdim, order='F')
+
     return a,b
 
 def _orthcores(a,dir='right'):
@@ -299,6 +325,7 @@ def TT_factorisation_pinv(cores,n_row_modes):
     P_cores = cores[:n_row_modes]
 
     c = S_cores[0]
+    #print((c.reshape((c.shape[0],np.prod(c.shape[1:])))).shape)
     U,s,V = np.linalg.svd(c.reshape((c.shape[0],np.prod(c.shape[1:])),order='F'),full_matrices=False)
     P_cores[-1] = np.tensordot(P_cores[-1],U,axes=(2,0))
     S_cores[0] = (np.diag(1./s).dot(V)).reshape(c.shape,order='F')
@@ -308,13 +335,15 @@ def TT_factorisation_pinv(cores,n_row_modes):
 def TT_spectral_learning(H_2l_cores, H_2l1_cores, H_l_cores):
     l = len(H_l_cores) - 1
     P_cores, S_cores = TT_factorisation_pinv(H_2l_cores,l)
-    
+
     # compute alpha
     alpha = TT_product(H_l_cores,S_cores)
 
     # compute A
     A_left = TT_product(H_2l1_cores[:l],P_cores)
     A_right = TT_product(H_2l1_cores[l+1:],S_cores)
+    #print(P_cores)
+    #print(S_cores)
     A = np.tensordot(A_left,H_2l1_cores[l],(2,0))
     A = np.tensordot(A,A_right,(4,0))
 
@@ -325,7 +354,6 @@ def TT_spectral_learning(H_2l_cores, H_2l1_cores, H_l_cores):
 
     model = LinRNN(alpha.squeeze(), A.squeeze(), omega.squeeze())
     return model
-
 
 
 

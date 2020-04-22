@@ -17,11 +17,30 @@ def tic():
 def toc(t):
     return time.clock() - t
 
+def cal_RMSE(pred, ytest, mean_data, std_data):
+    pred = (pred * std_data) + mean_data
+    ytest = (ytest * std_data) + mean_data
+    return np.sqrt(np.mean((pred - ytest) ** 2))
+
+
+def cal_MAPE(pred, ytest, mean_data, std_data):
+    pred = (pred * std_data) + mean_data
+    ytest = (ytest * std_data) + mean_data
+    return np.mean(np.abs(pred - ytest) / ytest)
+
+
+def cal_MAE(pred, ytest, mean_data, std_data):
+    pred = (pred * std_data) + mean_data
+    ytest = (ytest * std_data) + mean_data
+    return np.mean(np.abs(pred - ytest))
+
+#def padding(X):
+
 
 
 if __name__ == '__main__':
     '''
-    python Addition_EXP.py 'launch' './new_examples_add' 0.1  2 0.1
+    python Run_Experiment.py -exp Addition -ns 2 -nr 1 -var 0.1 -a 1. -aepo 10
     '''
 
     L_num_examples = [20, 40, 80, 160, 320, 640, 1500, 2560, 5000]
@@ -72,12 +91,12 @@ if __name__ == '__main__':
     '''If running Random2RNN exp, and launching a new experiment, specify the following'''
     parser.add_argument('-var', '--noise', help='variance of the gaussian noise', type=float)
     parser.add_argument('-ns', '--states_number', help='number of states for the model', type=int)
-    parser.add_argument('-ld', '--load_data', help='load the previously created data', action='store_true')
+    parser.add_argument('-ld', '--load_data', default=False, help='load the previously created data', action='store_true')
     parser.add_argument('-tfn', '--target_file_name', help='target file name')
     parser.add_argument('-tns', '--target_number_states', help='number of states for the target 2-rnn', type=int)
     parser.add_argument('-tid', '--target_input_dimension', help='input dimension for the target 2-rnn', type=int)
     parser.add_argument('-tod', '--target_output_dimension', help='output dimension for the target 2-rnn', type=int)
-    parser.add_argument('-lt' '--load_target', help='load the previously created target 2rnn', action='store_true')
+    parser.add_argument('-lt', '--load_target', default=False, help='load the previously created target 2rnn', action='store_true')
 
     '''If running TIHT+SGD, specify the following'''
     parser.add_argument('-lr2', help='learning rate for sgd 2rnn', type=float)
@@ -104,24 +123,25 @@ if __name__ == '__main__':
     else:
         raise Exception('Did not initialize alpha, try set up after -a argument')
 
-    if args.load_data == True:
+    if args.load_data:
         load_data = True
     else:
         load_data = False
 
-    if args.load_target == True:
+    if args.load_target:
         load_target = True
     else:
         load_target = False
-
+    if args.number_runs:
+        num_runs = args.number_runs
     if args.list_number_examples:
         L_num_examples = args.list_number_examples
     if args.number_runs:
         N_runs = args.number_runs
     if args.length:
         length = args.length
-    if args.aepo:
-        ALS_epochs = args.aepo
+    if args.ALS_epoches:
+        ALS_epochs = args.ALS_epoches
     if args.testing_length:
         test_length = args.testing_length
     if args.method_list:
@@ -154,6 +174,10 @@ if __name__ == '__main__':
         target_output_dim = args.target_output_dimension
 
     '''Folder set up and results savers set up'''
+    if exp =='Addition':
+        xp_path = './Data/Addition'
+    elif exp == 'RandomRNN':
+        xp_path = './Data/RandomRNN'
     if not os.path.exists(xp_path):
         os.makedirs(xp_path)
     if not os.path.exists(xp_path + 'noise_' + str(noise_level)):
@@ -181,14 +205,15 @@ if __name__ == '__main__':
 
     '''Generate corresponding experiment data'''
     if exp == 'Addition':
+        print(load_data)
         if load_data == False:
-            data_function = lambda l: synthetic_data.generate_data_simple_addition(1000, l, noise_level=noise_level)
-            Xtest, ytest = data_function(test_length)
-            with open('./Data/Addition/noise_' + str(noise_level) + '/Test.pickle', 'wb') as f:
+            data_function = lambda l, n: synthetic_data.generate_data_simple_addition(num_examples = n, seq_length = l, noise_level=noise_level)
+            Xtest, ytest = data_function(n = 1000, l = test_length)
+            with open(xp_path + '/Test.pickle', 'wb') as f:
                 pickle.dump([Xtest, ytest], f)
 
         else:
-            data_function = lambda l: synthetic_data.generate_data_simple_addition(1000, l, noise_level=noise_level)
+            data_function = lambda l, n: synthetic_data.generate_data_simple_addition(num_examples = n, seq_length = l, noise_level=noise_level)
             with open('./Data/Addition/noise_' + str(noise_level) + '/Test.pickle', 'rb') as f:
                 [Xtest, ytest] = pickle.load(f)
 
@@ -206,9 +231,9 @@ if __name__ == '__main__':
                 with open(target_file_name, 'wb') as f:
                     pickle.dump(target, f)
 
-            data_function = lambda l: synthetic_data.generate_data(target, 1000, l,
+            data_function = lambda l, n: synthetic_data.generate_data(target, N_samples = n, seq_length = l,
                                                                    noise_variance=noise_level)
-            Xtest, ytest = data_function(test_length)
+            Xtest, ytest = data_function(n = 1000, l = test_length)
             with open(xp_path + 'all_data.pickle', 'wb') as f:
                 pickle.dump([Xtest, ytest], f)
         else:
@@ -217,121 +242,136 @@ if __name__ == '__main__':
                 [Xtest, ytest] = pickle.load(f)
             with open(target_file_name, 'rb') as f:
                 target = pickle.load(f)
+            data_function = lambda l, n: synthetic_data.generate_data(target, n, l, noise_variance=noise_level)
+    elif exp == 'Wind':
+        data, train_test_split = synthetic_data.generate_wind_speed('./Data/Wind_Speed/train.csv', './Data/Wind_Speed/test.csv')
+        mean_data = np.  mean(data)
+        std_data = np.std(data)
+        data = (data - mean_data) / std_data
+        data_function_train = lambda l: synthetic_data.generate_wind_train(data, train_test_split, l)
+        data_function_test = lambda l: synthetic_data.generate_wind_test(data, train_test_split, l)
 
     else:
         raise Exception('Experiment not found')
     '''Run experiment'''
 
+    for run in range(num_runs):
+        for num_examples in L_num_examples:
+            print('______\nsample size:', num_examples)
+            print('Current Experiment: ' + str(exp) +' with noise ' + str(noise_level) + ' and ' + str(num_states) + ' states')
+            #data_function = lambda l: generate_data_simple_addition(num_examples, l, noise_level=noise_level)
+            Xl, yl = data_function(n = num_examples, l = length)
+            X2l, y2l = data_function(n = num_examples, l = length * 2)
+            X2l1, y2l1 = data_function(n = num_examples, l = length * 2 + 1)
+            # data_function = lambda l: generate_data_simple_addition2(1000, l, noise=noise_level)
+            #Xtest, ytest = data_function(1000, test_length)
 
-    for num_examples in L_num_examples:
-        print('______\nsample size:', num_examples)
-        print('Current Experiment: Addition with noise ' + str(noise_level) + ' and ' + str(num_states) + ' states')
-        #data_function = lambda l: generate_data_simple_addition(num_examples, l, noise_level=noise_level)
-        Xl, yl = data_function(length)
-        X2l, y2l = data_function(length * 2)
-        X2l1, y2l1 = data_function(length * 2 + 1)
-        # data_function = lambda l: generate_data_simple_addition2(1000, l, noise=noise_level)
-        Xtest, ytest = data_function(test_length)
+            for method in methods:
+                # print(method)
+                if method != 'LSTM' and method != 'TIHT+SGD' and method != 'ALS':
+                    Tl = learning.sequence_to_tensor(Xl)
+                    T2l = learning.sequence_to_tensor(X2l)
+                    T2l1 = learning.sequence_to_tensor(X2l1)
+                    t = tic()
+                    Hl = learning.approximate_hankel(Tl, yl, alpha_ini_value=alpha,
+                                                     rank=num_states, eps=TIHT_epsilon,
+                                                     learning_rate=TIHT_learning_rate, max_iters=TIHT_max_iters,
+                                                     method=method, verbose=-1)
+                    H2l = learning.approximate_hankel(T2l, y2l, alpha_ini_value=alpha,
+                                                      rank=num_states, eps=TIHT_epsilon,
+                                                      learning_rate=TIHT_learning_rate, max_iters=TIHT_max_iters,
+                                                      method=method, verbose=-1)
+                    H2l1 = learning.approximate_hankel(T2l1, y2l1, alpha_ini_value=alpha, rank=num_states, eps=TIHT_epsilon,
+                                                       learning_rate=TIHT_learning_rate, max_iters=TIHT_max_iters,
+                                                       method=method, verbose=-1)
 
-        for method in methods:
-            # print(method)
-            if method != 'LSTM' and method != 'TIHT+SGD' and method != 'ALS':
-                Tl = learning.sequence_to_tensor(Xl)
-                T2l = learning.sequence_to_tensor(X2l)
-                T2l1 = learning.sequence_to_tensor(X2l1)
-                t = tic()
-                Hl = learning.approximate_hankel(Tl, yl, alpha_ini_value=alpha,
-                                                 rank=num_states, eps=TIHT_epsilon,
-                                                 learning_rate=TIHT_learning_rate, max_iters=TIHT_max_iters,
-                                                 method=method, verbose=-1)
-                H2l = learning.approximate_hankel(T2l, y2l, alpha_ini_value=alpha,
-                                                  rank=num_states, eps=TIHT_epsilon,
-                                                  learning_rate=TIHT_learning_rate, max_iters=TIHT_max_iters,
-                                                  method=method, verbose=-1)
-                H2l1 = learning.approximate_hankel(T2l1, y2l1, alpha_ini_value=alpha, rank=num_states, eps=TIHT_epsilon,
-                                                   learning_rate=TIHT_learning_rate, max_iters=TIHT_max_iters,
-                                                   method=method, verbose=-1)
+                    learned_model = learning.spectral_learning(num_states, H2l, H2l1, Hl)
 
-                learned_model = learning.spectral_learning(num_states, H2l, H2l1, Hl)
+                    test_mse = learning.compute_mse(learned_model, Xtest, ytest)
+                    train_mse = learning.compute_mse(learned_model, X2l1, y2l1)
+                    # print(test_mse)
+                    if train_mse > np.mean(y2l1 ** 2):
+                        test_mse = np.mean(ytest ** 2)
+                    print(method, "test MSE:", test_mse, "\t\ttime:", toc(t))
+                    results[method][num_examples].append(test_mse)
+                    times[method][num_examples].append(toc(t))
+                elif method == 'LSTM':
 
-                test_mse = learning.compute_mse(learned_model, Xtest, ytest)
-                train_mse = learning.compute_mse(learned_model, X2l1, y2l1)
-                # print(test_mse)
-                if train_mse > np.mean(y2l1 ** 2):
-                    test_mse = np.mean(ytest ** 2)
-                print(method, "test MSE:", test_mse, "\t\ttime:", toc(t))
-                results[method][num_examples].append(test_mse)
-                times[method][num_examples].append(toc(t))
-            elif method == 'LSTM':
-
-                def padding_function(x, desired_length):
-                    if desired_length <= x.shape[1]:
+                    def padding_function(x, desired_length):
+                        if desired_length <= x.shape[1]:
+                            return x
+                        x = np.insert(x, x.shape[1], np.zeros((desired_length - x.shape[1], 1, x.shape[2])), axis=1)
                         return x
-                    x = np.insert(x, x.shape[1], np.zeros((desired_length - x.shape[1], 1, x.shape[2])), axis=1)
-                    return x
-                Xl_padded = padding_function(Xl, test_length)
-                X2l_padded = padding_function(X2l, test_length)
-                X2l1_padded = padding_function(X2l1, test_length)
-                X = np.concatenate((Xl_padded, X2l_padded, X2l1_padded))
-                Y = np.concatenate((yl, y2l, y2l1))
-                t = tic()
-                learned_model = learning.RNN_LSTM(X, Y, test_length, num_states, noise_level, 'RandomRNN')
-                test_mse = learning.compute_mse(learned_model, Xtest, ytest, lstm=True)
-                train_mse = learning.compute_mse(learned_model, X2l1_padded, y2l1, lstm=True)
-                # if train_mse > np.mean(y2l1 ** 2):
-                #   test_mse = np.mean(ytest ** 2)
-                print(method, "test MSE:", test_mse, "\t\ttime:", toc(t))
-                results[method][num_examples].append(test_mse)
-                times[method][num_examples].append(toc(t))
-            elif method == 'TIHT+SGD':
-                X = []
-                Y = []
-                for i in range(length * 2 + 2):
-                    tempx, tempy = data_function(i)
-                    X.append(tempx)
-                    Y.append(tempy)
-                t = tic()
-                if noise_level == 0.:
-                    TIHT_learning_rate = 0.000001
-                learned_model = learning.TIHT_SGD_torch(X, Y, num_states, length, verbose, TIHT_epsilon,
-                                                        TIHT_learning_rate,
-                                                        TIHT_max_iters,
-                                                        lr2, epo2, b2, tol, alpha=1., lifting=False)
+                    Xl_padded = padding_function(Xl, test_length)
+                    X2l_padded = padding_function(X2l, test_length)
+                    X2l1_padded = padding_function(X2l1, test_length)
+                    X = np.concatenate((Xl_padded, X2l_padded, X2l1_padded))
+                    Y = np.concatenate((yl, y2l, y2l1))
+                    t = tic()
+                    learned_model = learning.RNN_LSTM(X, Y, test_length, num_states, noise_level, 'RandomRNN')
+                    test_mse = learning.compute_mse(learned_model, Xtest, ytest, lstm=True)
+                    train_mse = learning.compute_mse(learned_model, X2l1_padded, y2l1, lstm=True)
+                    # if train_mse > np.mean(y2l1 ** 2):
+                    #   test_mse = np.mean(ytest ** 2)
+                    print(method, "test MSE:", test_mse, "\t\ttime:", toc(t))
+                    results[method][num_examples].append(test_mse)
+                    times[method][num_examples].append(toc(t))
+                elif method == 'TIHT+SGD':
+                    X = []
+                    Y = []
+                    for i in range(length * 2 + 2):
+                        tempx, tempy = data_function(i)
+                        X.append(tempx)
+                        Y.append(tempy)
+                    t = tic()
+                    if noise_level == 0.:
+                        TIHT_learning_rate = 0.000001
+                    learned_model = learning.TIHT_SGD_torch(X, Y, num_states, length, verbose, TIHT_epsilon,
+                                                            TIHT_learning_rate,
+                                                            TIHT_max_iters,
+                                                            lr2, epo2, b2, tol, alpha=1., lifting=False)
 
-                test_mse = learning.compute_mse(learned_model, Xtest, ytest, if_tc=True)
-                train_mse = learning.compute_mse(learned_model, X2l1, y2l1, if_tc=True)
-                if train_mse > np.mean(y2l1 ** 2):
-                    test_mse = np.mean(ytest ** 2)
-                print(method, "test MSE:", test_mse, "\t\ttime:", toc(t))
-                results[method][num_examples].append(test_mse)
-                times[method][num_examples].append(toc(t))
+                    test_mse = learning.compute_mse(learned_model, Xtest, ytest, if_tc=True)
+                    train_mse = learning.compute_mse(learned_model, X2l1, y2l1, if_tc=True)
+                    if train_mse > np.mean(y2l1 ** 2):
+                        test_mse = np.mean(ytest ** 2)
+                    print(method, "test MSE:", test_mse, "\t\ttime:", toc(t))
+                    results[method][num_examples].append(test_mse)
+                    times[method][num_examples].append(toc(t))
 
-            elif method == 'ALS':
-                # yl_temp = yl.reshape(-1, 1)
-                # y2l_temp = y2l.reshape(-1, 1)
-                # y2l1_temp = y2l1.reshape(-1, 1)
-                # print(Xl.shape, yl.shape)
-                #num_states = 2
-                # print(Xl.shape, yl.shape)
-                H_l_cores = learning.ALS(Xl, yl, rank=num_states, X_vali=None, Y_vali=None, n_epochs=ALS_epochs)
-                H_2l_cores = learning.ALS(X2l, y2l, rank=num_states, X_vali=None, Y_vali=None, n_epochs=ALS_epochs)
-                H_2l1_cores = learning.ALS(X2l1, y2l1, rank=num_states, X_vali=None, Y_vali=None, n_epochs=ALS_epochs)
-                # for i in range(len(H_l_cores)):
-                #    print('cores', H_l_cores[i].shape)
+                elif method == 'ALS':
+                    print(Xl.shape, X2l.shape, X2l1.shape, Xtest.shape)
+                    H_l_cores = learning.ALS(Xl, yl, rank=num_states, X_vali=None, Y_vali=None, n_epochs=ALS_epochs)
+                    H_2l_cores = learning.ALS(X2l, y2l, rank=num_states, X_vali=None, Y_vali=None, n_epochs=ALS_epochs)
+                    H_2l1_cores = learning.ALS(X2l1, y2l1, rank=num_states, X_vali=None, Y_vali=None, n_epochs=ALS_epochs)
 
-                # learned_model = learning.spectral_learning(num_states, H_2l_cores, H_2l1_cores, H_l_cores)
-                learned_model = TT_spectral_learning(H_2l_cores, H_2l1_cores, H_l_cores)
-                # print(learned_model.alpha.shape)
-                # print(ytest.shape, Xtest.shape)
-                Xtest = np.swapaxes(Xtest, 1, 2)
-                X2l1 = np.swapaxes(X2l1, 1, 2)
-                test_mse = learning.compute_mse(learned_model, Xtest, ytest)
-                train_mse = learning.compute_mse(learned_model, X2l1, y2l1)
-                if train_mse > np.mean(y2l1 ** 2):
-                    test_mse = np.mean(ytest ** 2)
-                print(method, "test MSE:", test_mse, train_mse)
-                results[method][num_examples].append(test_mse)
-                # times[method][num_examples].append(toc(t))
+                    # for j in range(len(H_l_cores)):
+                    #     print(H_l_cores[j].shape)
+                    # #print(H_l_cores[-1])
+                    # for j in range(len(H_2l_cores)):
+                    #     print(H_2l_cores[j].shape)
+                    # #print(H_2l_cores[-1])
+                    # for j in range(len(H_2l1_cores)):
+                    #     print(H_2l1_cores[j].shape)
+                    # #print(H_2l1_cores[-1])
 
-        with open(xp_path + 'results_' + str(num_states) + '_states.pickle', 'wb') as f:
-            pickle.dump(results, f)
+                    learned_model = TT_spectral_learning(H_2l_cores, H_2l1_cores, H_l_cores)
+                    #learned_model.alpha = learned_model.alpha.reshape(-1, 1)
+                    #print(learned_model.alpha, learned_model.A.shape, learned_model.Omega.shape)
+                    #if exp == 'Addition':
+                    Xtest_temp = np.swapaxes(Xtest, 1, 2)
+                    train = np.swapaxes(X2l1, 1, 2)
+                    #else:
+                    #Xtest_temp = Xtest
+                    #train = X2l1
+                    #print(Xtest_temp.shape)
+                    test_mse = learning.compute_mse(learned_model, Xtest_temp, ytest)
+                    train_mse = learning.compute_mse(learned_model, train, y2l1)
+                    if train_mse > np.mean(y2l1 ** 2):
+                       test_mse = np.mean(ytest ** 2)
+                    print(method, "test MSE:", test_mse)
+                    results[method][num_examples].append(test_mse)
+
+            with open(xp_path + 'results_' + str(num_states) + '_states.pickle', 'wb') as f:
+                pickle.dump(results, f)
+    print(results)

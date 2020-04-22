@@ -373,33 +373,32 @@ def generate_simple_addition(num_examples = 100, traj_length = 5, n_dim = 1, noi
     Y = np.sum(X[:, :-1, :], axis = 2)
     Y = Y.reshape(num_examples, -1) + np.random.normal(0, noise_level, [num_examples, n_dim]).reshape(num_examples, n_dim)
     return X, Y
-
 #
-device = 'cuda:0'
+# device = 'cuda:0'
 #
-n_dim = 1
-traj_length = 4
-num_examples = 1000
-noise_level = 0.1
-rank = 2
-X, Y = generate_simple_addition(num_examples = num_examples, traj_length = traj_length, n_dim = n_dim, noise_level = noise_level)
-X_val, Y_val = generate_simple_addition(num_examples = int(min(num_examples*0.5, 100)), traj_length = traj_length, n_dim = n_dim, noise_level = noise_level)
-#print(Y.shape)
-n_epochs = 50
-#print('starting')
-print(X.shape, Y.shape)
-#train_error_ALS, test_error_ALS, tensor_train = train_ALS(X, Y, rank, X_val, Y_val, n_epochs)
-
-X, Y = (torch.from_numpy(X)).float(), (torch.from_numpy(Y)).float()
-X_val, Y_val = (torch.from_numpy(X_val)).float(), (torch.from_numpy(Y_val)).float()
-input_dim = X.shape[1]
-output_dim = Y.reshape(len(Y), -1).shape[1]
-print('starting')
-model = Net(rank, input_dim, output_dim, traj_length).to(device)
-print('starting')
-criterion = nn.MSELoss()
-lr = 0.02
-optimizer = torch.optim.Adam(model.parameters(), lr=lr, amsgrad=True)
-batch_size = 256
-n_epochs = 10000
-train_error_GD, test_error_GD, model = train_gradient_descent_standard(X, Y, X_val, Y_val, model, optimizer, criterion, n_epochs, device, batch_size)
+# n_dim = 1
+# traj_length = 4
+# num_examples = 1000
+# noise_level = 0.1
+# rank = 2
+# X, Y = generate_simple_addition(num_examples = num_examples, traj_length = traj_length, n_dim = n_dim, noise_level = noise_level)
+# X_val, Y_val = generate_simple_addition(num_examples = int(min(num_examples*0.5, 100)), traj_length = traj_length, n_dim = n_dim, noise_level = noise_level)
+# #print(Y.shape)
+# n_epochs = 50
+# #print('starting')
+# print(X.shape, Y.shape)
+# #train_error_ALS, test_error_ALS, tensor_train = train_ALS(X, Y, rank, X_val, Y_val, n_epochs)
+#
+# X, Y = (torch.from_numpy(X)).float(), (torch.from_numpy(Y)).float()
+# X_val, Y_val = (torch.from_numpy(X_val)).float(), (torch.from_numpy(Y_val)).float()
+# input_dim = X.shape[1]
+# output_dim = Y.reshape(len(Y), -1).shape[1]
+# print('starting')
+# model = Net(rank, input_dim, output_dim, traj_length).to(device)
+# print('starting')
+# criterion = nn.MSELoss()
+# lr = 0.02
+# optimizer = torch.optim.Adam(model.parameters(), lr=lr, amsgrad=True)
+# batch_size = 256
+# n_epochs = 10000
+# train_error_GD, test_error_GD, model = train_gradient_descent_standard(X, Y, X_val, Y_val, model, optimizer, criterion, n_epochs, device, batch_size)
