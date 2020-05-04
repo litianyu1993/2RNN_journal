@@ -4,7 +4,13 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from torch.utils import data
+import time
+import tensorly as tl
+def tic():
+    return time.clock()
 
+def toc(t):
+    return time.clock() - t
 def khatri_rao_torch(X, Y):
   result = [torch.ger(X[i], Y[i]) for i in range(len(X))]
   return torch.stack(result).reshape(len(X), -1)
@@ -152,7 +158,8 @@ def train_gradient_descent_standard(X, Y, X_val, Y_val, model, optimizer, criter
 
 
 def khatri_rao(X, Y):
-    result = [np.outer(X[i], Y[i]) for i in range(len(X))]
+    #result = [np.outer(X[i], Y[i]) for i in range(len(X))]
+    result = tl.tenalg.khatri_rao([X.T, Y.T]).T
     return np.asarray(result).reshape(len(X), -1)
 
 
@@ -270,13 +277,18 @@ def solve_cores_ALS(X, Y, rank=5, tensor_train=None):
     dimension = X.shape[1]
     if tensor_train is None:
         tensor_train = create_TT(X, Y, rank)
+        print(evaluate(X, Y, tensor_train))
     num_cores = len(tensor_train)
+    #t = tic()
     S = traverse_tt(tensor_train, X, start_core_number=1)
+    #print('1', toc(t))
+    #t = tic()
     W = []
     for j in range(out_dim):
         temp_S = S[:, :, j]
         temp_khatri = khatri_rao(X[:, :, 0], np.asarray(temp_S).transpose())
         W.append(temp_khatri)
+    #print('2', toc(t))
     W = np.asarray(W)
     W = tn.Node(W)
     W = W.reorder_edges([W[1], W[0], W[2]]).tensor
@@ -288,17 +300,22 @@ def solve_cores_ALS(X, Y, rank=5, tensor_train=None):
     # print('here', tensor_train[-1].tensor.shape)
     # print(tensor_train[0])
     for i in range(1, num_cores - 1):
+        #t = tic()
         P = traverse_tt(tensor_train, X, start_core_number=0, end_core_number=i)
         S = traverse_tt(tensor_train, X, start_core_number=i + 1)
+        #print('3', toc(t))
         # print('here', tensor_train[-1].tensor.shape)
         W = []
+        #t = tic()
         for j in range(out_dim):
             temp_S = S[:, :, j]
             temp_khatri = khatri_rao(X[:, :, i], np.asarray(temp_S).transpose())
             W.append(temp_khatri)
+        #print('4', toc(t))
         W = np.asarray(W)
         W = tn.Node(W)
         W = W.reorder_edges([W[1], W[2], W[0]]).tensor
+
         # print(W.shape)
         new_W = []
         for j in range(out_dim):
@@ -310,15 +327,16 @@ def solve_cores_ALS(X, Y, rank=5, tensor_train=None):
         W = W.reorder_edges([W[1], W[0], W[2]]).tensor
         W = W.reshape(-1, W.shape[2])
         Y = Y.reshape(-1)
+        #t = tic()
         temp_W = (np.linalg.pinv(W) @ Y).reshape(rank, dimension, rank)
-
-        #####Orthogonalize the core #######
-        temp_W = temp_W.reshape(rank * dimension, rank)
+        #print('5', toc(t))
+        # #####Orthogonalize the core #######
+        # temp_W = temp_W.reshape(rank * dimension, rank)
         # svd_truncate = rank
-        U, D, V = np.linalg.svd(temp_W)
-        # print(U.shape, D.shape, V.shape)
-        temp_W = U[:, :rank].reshape(rank, dimension, rank)
-        tensor_train[i + 1] = tn.Node((np.diag(D) @ V @ tensor_train[i + 1].tensor.reshape(rank, -1)).reshape(tensor_train[i + 1].tensor.shape))
+        # U, D, V = np.linalg.svd(temp_W)
+        # # print(U.shape, D.shape, V.shape)
+        # temp_W = U[:, :rank].reshape(rank, dimension, rank)
+        # tensor_train[i + 1] = tn.Node((np.diag(D) @ V @ tensor_train[i + 1].tensor.reshape(rank, -1)).reshape(tensor_train[i + 1].tensor.shape))
 
         tensor_train[i] = tn.Node(temp_W)
         # print(np.asarray(tensor_train[i].tensor).shape)
@@ -326,8 +344,17 @@ def solve_cores_ALS(X, Y, rank=5, tensor_train=None):
     W = khatri_rao(P, X[:, :, -1])
     # print(W.shape, Y_old.shape)
     tensor_train[-1] = tn.Node((np.linalg.pinv(W) @ Y_old).reshape(rank, dimension, out_dim))
-    # for i in range(len(tensor_train)):
-    #  print(tensor_train[i].tensor.shape)
+    scalar = 1.
+    for i in range(len(tensor_train)):
+        #print(np.mean(tensor_train[i].tensor))
+        scalar_temp = np.max(tensor_train[i].tensor)
+        tensor_train[i].tensor /= scalar_temp
+        scalar *= scalar_temp
+    for i in range(len(tensor_train)):
+        tensor_train[i].tensor *= np.power(scalar, 1/len(tensor_train))
+        #scalar *= scalar_temp
+        #print(tensor_train[i].tensor)
+    #tensor_train[-1].tensor *= scalar
     return tensor_train
 
 
@@ -342,13 +369,15 @@ def evaluate(X, Y, tensor_train):
     # print(X[:, 0, :].shape, target.shape)
     # print('actual target:', np.mean((target - Y)**2))
     # print('predicted:', np.mean((pred - Y)**2))
+    print(pred[0:5])
+    print(Y[0:5])
     return np.mean((pred - Y) ** 2)
 
 
 def train_ALS(X, Y, rank, X_val=None, Y_val=None, n_epochs = 50):
     tensor_train = solve_cores_ALS(X, Y, rank = rank)
     #tensor_train = normalize_cores(tensor_train)
-    evaluate(X, Y, tensor_train)
+
     error = []
     test_error = []
     #target = np.sum(X[:, :-1, :], axis = 2).reshape(X.shape[0], -1)
@@ -357,7 +386,7 @@ def train_ALS(X, Y, rank, X_val=None, Y_val=None, n_epochs = 50):
         #for j in range(len(tensor_train)):
         #    print(tensor_train[j].tensor.shape)
         #tensor_train = normalize_cores(tensor_train)
-
+        print('training error: ' + str(evaluate(X, Y, tensor_train)))
         if X_val is not None:
             error.append(evaluate(X, Y, tensor_train))
             test_error.append(evaluate(X_val, Y_val, tensor_train))
@@ -390,15 +419,15 @@ def generate_simple_addition(num_examples = 100, traj_length = 5, n_dim = 1, noi
 # #train_error_ALS, test_error_ALS, tensor_train = train_ALS(X, Y, rank, X_val, Y_val, n_epochs)
 #
 # X, Y = (torch.from_numpy(X)).float(), (torch.from_numpy(Y)).float()
-# X_val, Y_val = (torch.from_numpy(X_val)).float(), (torch.from_numpy(Y_val)).float()
-# input_dim = X.shape[1]
-# output_dim = Y.reshape(len(Y), -1).shape[1]
-# print('starting')
-# model = Net(rank, input_dim, output_dim, traj_length).to(device)
-# print('starting')
-# criterion = nn.MSELoss()
-# lr = 0.02
-# optimizer = torch.optim.Adam(model.parameters(), lr=lr, amsgrad=True)
-# batch_size = 256
-# n_epochs = 10000
-# train_error_GD, test_error_GD, model = train_gradient_descent_standard(X, Y, X_val, Y_val, model, optimizer, criterion, n_epochs, device, batch_size)
+# # X_val, Y_val = (torch.from_numpy(X_val)).float(), (torch.from_numpy(Y_val)).float()
+# # input_dim = X.shape[1]
+# # output_dim = Y.reshape(len(Y), -1).shape[1]
+# # print('starting')
+# # model = Net(rank, input_dim, output_dim, traj_length).to(device)
+# # print('starting')
+# # criterion = nn.MSELoss()
+# # lr = 0.02
+# # optimizer = torch.optim.Adam(model.parameters(), lr=lr, amsgrad=True)
+# # batch_size = 256
+# # n_epochs = 10000
+# # train_error_GD, test_error_GD, model = train_gradient_descent_standard(X, Y, X_val, Y_val, model, optimizer, criterion, n_epochs, device, batch_size)

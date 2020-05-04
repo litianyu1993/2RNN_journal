@@ -77,6 +77,37 @@ def generate_wind_speed(train_file_path, test_file_path, mean_window_size = 12):
     data = temp_data
     return data, train_test_split
 
+def pad_data(X_vec, Y_vec, max_length = None):
+    if max_length is None:
+        max_length = X_vec[-1].shape[2]
+
+    num_examples = 0
+    for X in X_vec:
+        num_examples += X.shape[0]
+    #print('here', X_vec[0].shape)
+    padded = np.zeros((num_examples, X_vec[0].shape[1]+1, max_length))
+    #print('pad', padded.shape)
+    if Y_vec[0].ndim == 1:
+        out_dim = 1
+    else:
+        out_dim = Y_vec[0].shape[1]
+    print('out', out_dim)
+    y = np.zeros((num_examples, out_dim))
+
+    current_pos = 0
+    for X in X_vec:
+        padded[current_pos:(current_pos + X.shape[0]), :X.shape[1], :X.shape[2]] = X
+        if X.shape[2] < max_length:
+            padded[current_pos:(current_pos + X.shape[0]), -1, X.shape[2]:] = 1.
+        current_pos = current_pos + X.shape[0]
+    current_pos = 0
+    for Y in Y_vec:
+        y[current_pos:(current_pos+Y.shape[0])] = Y
+        current_pos = current_pos + X.shape[0]
+    return padded, y
+
+
+
 def generate_wind_speed_preprocess(data, length):
     X = []
     Y = []

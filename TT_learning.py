@@ -319,8 +319,10 @@ def TT_factorisation_pinv(cores,n_row_modes):
     of the TT-decompositions of the pseudo-inverses of P and S, where P and S are such that
     H = PS
     """
+    print(len(cores))
     for i in range(n_row_modes):
         cores[i:i+2] = _rightorth(cores[i],cores[i+1])
+    print(len(cores), n_row_modes, len(cores[n_row_modes:]))
     S_cores = _orthcores(cores[n_row_modes:], dir='left')
     P_cores = cores[:n_row_modes]
 
@@ -337,6 +339,10 @@ def TT_spectral_learning(H_2l_cores, H_2l1_cores, H_l_cores):
     P_cores, S_cores = TT_factorisation_pinv(H_2l_cores,l)
 
     # compute alpha
+    for i in range(len(H_l_cores)):
+        print('hl',H_l_cores[i].shape)
+    for i in range(len(S_cores)):
+        print('score', S_cores[i].shape)
     alpha = TT_product(H_l_cores,S_cores)
 
     # compute A

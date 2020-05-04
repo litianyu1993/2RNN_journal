@@ -27,6 +27,9 @@ import keras
 
 from Fast_hankel_recovery import train_ALS, evaluate
 
+
+
+
 def compute_mse(mdl, X, y, print_first_five_results = False, lstm = False, if_tf = False, if_tc = False):
     '''
     Compute the mean squared errors for the predictions computed by model 'mdl'
@@ -199,17 +202,17 @@ def OLS(X,Y):
 def convert_to_array(tt):
     tt_arr = []
     tt_arr.append(tt[0].tensor.reshape(1, tt[0].shape[0], tt[0].shape[1]))
-    for i in range(1, len(tt) - 1):
+    for i in range(1, len(tt)):
         tt_arr.append(tt[i].tensor)
-    temp = tt[-1].tensor
-    dim = temp.shape
-    temp = temp.reshape(dim[0] * dim[1], dim[2])
-    U, D, V = np.linalg.svd(temp)
-    middle_rank = min(temp.shape[0], temp.shape[1])
-    a = U[:, :middle_rank].reshape(dim[0], dim[1], middle_rank)
-    b = (np.diag(D) @ V[:middle_rank, :]).reshape(middle_rank, V.shape[1], 1)
-    tt_arr.append(a)
-    tt_arr.append(b)
+    # temp = tt[-1].tensor
+    # dim = temp.shape
+    # temp = temp.reshape(dim[0] * dim[1], dim[2])
+    # U, D, V = np.linalg.svd(temp)
+    # middle_rank = min(temp.shape[0], temp.shape[1])
+    # a = U[:, :middle_rank].reshape(dim[0], dim[1], middle_rank)
+    # b = (np.diag(D) @ V[:middle_rank, :]).reshape(middle_rank, V.shape[1], 1)
+    # tt_arr.append(a)
+    # tt_arr.append(b)
     #tt_arr.append(tt[-1].tensor)
     return tt_arr
 def contract_all_edges(tt):
